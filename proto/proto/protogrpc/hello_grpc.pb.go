@@ -4,7 +4,7 @@
 // - protoc             v3.6.1
 // source: hello.proto
 
-package proto
+package grpc_practice
 
 import (
 	context "context"
@@ -25,6 +25,9 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type HelloServiceClient interface {
 	Hello(ctx context.Context, in *proto.HelloRequest, opts ...grpc.CallOption) (*proto.HelloResponse, error)
+	HelloServerStream(ctx context.Context, in *proto.HelloRequest, opts ...grpc.CallOption) (HelloService_HelloServerStreamClient, error)
+	HelloClientStream(ctx context.Context, opts ...grpc.CallOption) (HelloService_HelloClientStreamClient, error)
+	HelloBiStream(ctx context.Context, opts ...grpc.CallOption) (HelloService_HelloBiStreamClient, error)
 }
 
 type helloServiceClient struct {
@@ -44,11 +47,111 @@ func (c *helloServiceClient) Hello(ctx context.Context, in *proto.HelloRequest, 
 	return out, nil
 }
 
+func (c *helloServiceClient) HelloServerStream(ctx context.Context, in *proto.HelloRequest, opts ...grpc.CallOption) (HelloService_HelloServerStreamClient, error) {
+	stream, err := c.cc.NewStream(ctx, &HelloService_ServiceDesc.Streams[0], "/proto.HelloService/HelloServerStream", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &helloServiceHelloServerStreamClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type HelloService_HelloServerStreamClient interface {
+	Recv() (*proto.HelloResponse, error)
+	grpc.ClientStream
+}
+
+type helloServiceHelloServerStreamClient struct {
+	grpc.ClientStream
+}
+
+func (x *helloServiceHelloServerStreamClient) Recv() (*proto.HelloResponse, error) {
+	m := new(proto.HelloResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *helloServiceClient) HelloClientStream(ctx context.Context, opts ...grpc.CallOption) (HelloService_HelloClientStreamClient, error) {
+	stream, err := c.cc.NewStream(ctx, &HelloService_ServiceDesc.Streams[1], "/proto.HelloService/HelloClientStream", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &helloServiceHelloClientStreamClient{stream}
+	return x, nil
+}
+
+type HelloService_HelloClientStreamClient interface {
+	Send(*proto.HelloRequest) error
+	CloseAndRecv() (*proto.HelloResponse, error)
+	grpc.ClientStream
+}
+
+type helloServiceHelloClientStreamClient struct {
+	grpc.ClientStream
+}
+
+func (x *helloServiceHelloClientStreamClient) Send(m *proto.HelloRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *helloServiceHelloClientStreamClient) CloseAndRecv() (*proto.HelloResponse, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(proto.HelloResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *helloServiceClient) HelloBiStream(ctx context.Context, opts ...grpc.CallOption) (HelloService_HelloBiStreamClient, error) {
+	stream, err := c.cc.NewStream(ctx, &HelloService_ServiceDesc.Streams[2], "/proto.HelloService/HelloBiStream", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &helloServiceHelloBiStreamClient{stream}
+	return x, nil
+}
+
+type HelloService_HelloBiStreamClient interface {
+	Send(*proto.HelloRequest) error
+	Recv() (*proto.HelloResponse, error)
+	grpc.ClientStream
+}
+
+type helloServiceHelloBiStreamClient struct {
+	grpc.ClientStream
+}
+
+func (x *helloServiceHelloBiStreamClient) Send(m *proto.HelloRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *helloServiceHelloBiStreamClient) Recv() (*proto.HelloResponse, error) {
+	m := new(proto.HelloResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // HelloServiceServer is the server API for HelloService service.
 // All implementations must embed UnimplementedHelloServiceServer
 // for forward compatibility
 type HelloServiceServer interface {
 	Hello(context.Context, *proto.HelloRequest) (*proto.HelloResponse, error)
+	HelloServerStream(*proto.HelloRequest, HelloService_HelloServerStreamServer) error
+	HelloClientStream(HelloService_HelloClientStreamServer) error
+	HelloBiStream(HelloService_HelloBiStreamServer) error
 	mustEmbedUnimplementedHelloServiceServer()
 }
 
@@ -58,6 +161,15 @@ type UnimplementedHelloServiceServer struct {
 
 func (UnimplementedHelloServiceServer) Hello(context.Context, *proto.HelloRequest) (*proto.HelloResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Hello not implemented")
+}
+func (UnimplementedHelloServiceServer) HelloServerStream(*proto.HelloRequest, HelloService_HelloServerStreamServer) error {
+	return status.Errorf(codes.Unimplemented, "method HelloServerStream not implemented")
+}
+func (UnimplementedHelloServiceServer) HelloClientStream(HelloService_HelloClientStreamServer) error {
+	return status.Errorf(codes.Unimplemented, "method HelloClientStream not implemented")
+}
+func (UnimplementedHelloServiceServer) HelloBiStream(HelloService_HelloBiStreamServer) error {
+	return status.Errorf(codes.Unimplemented, "method HelloBiStream not implemented")
 }
 func (UnimplementedHelloServiceServer) mustEmbedUnimplementedHelloServiceServer() {}
 
@@ -90,6 +202,79 @@ func _HelloService_Hello_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HelloService_HelloServerStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(proto.HelloRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(HelloServiceServer).HelloServerStream(m, &helloServiceHelloServerStreamServer{stream})
+}
+
+type HelloService_HelloServerStreamServer interface {
+	Send(*proto.HelloResponse) error
+	grpc.ServerStream
+}
+
+type helloServiceHelloServerStreamServer struct {
+	grpc.ServerStream
+}
+
+func (x *helloServiceHelloServerStreamServer) Send(m *proto.HelloResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _HelloService_HelloClientStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(HelloServiceServer).HelloClientStream(&helloServiceHelloClientStreamServer{stream})
+}
+
+type HelloService_HelloClientStreamServer interface {
+	SendAndClose(*proto.HelloResponse) error
+	Recv() (*proto.HelloRequest, error)
+	grpc.ServerStream
+}
+
+type helloServiceHelloClientStreamServer struct {
+	grpc.ServerStream
+}
+
+func (x *helloServiceHelloClientStreamServer) SendAndClose(m *proto.HelloResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *helloServiceHelloClientStreamServer) Recv() (*proto.HelloRequest, error) {
+	m := new(proto.HelloRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func _HelloService_HelloBiStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(HelloServiceServer).HelloBiStream(&helloServiceHelloBiStreamServer{stream})
+}
+
+type HelloService_HelloBiStreamServer interface {
+	Send(*proto.HelloResponse) error
+	Recv() (*proto.HelloRequest, error)
+	grpc.ServerStream
+}
+
+type helloServiceHelloBiStreamServer struct {
+	grpc.ServerStream
+}
+
+func (x *helloServiceHelloBiStreamServer) Send(m *proto.HelloResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *helloServiceHelloBiStreamServer) Recv() (*proto.HelloRequest, error) {
+	m := new(proto.HelloRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // HelloService_ServiceDesc is the grpc.ServiceDesc for HelloService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -102,6 +287,23 @@ var HelloService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _HelloService_Hello_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "HelloServerStream",
+			Handler:       _HelloService_HelloServerStream_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "HelloClientStream",
+			Handler:       _HelloService_HelloClientStream_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "HelloBiStream",
+			Handler:       _HelloService_HelloBiStream_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "hello.proto",
 }
