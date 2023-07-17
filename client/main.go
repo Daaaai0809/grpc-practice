@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	_ "google.golang.org/genproto/googleapis/rpc/errdetails"
 
 	proto "github.com/Daaaai0809/grpc-practice/proto/proto"
@@ -81,7 +82,13 @@ func Hello() {
 		Name: name,
 	}
 
-	res, err := client.Hello(context.Background(), req)
+	ctx := context.Background()
+	md := metadata.New(map[string]string{"type": "unary", "from": "client"})
+	ctx = metadata.NewOutgoingContext(ctx, md)
+
+	var header, trailer metadata.MD
+
+	res, err := client.Hello(ctx, req, grpc.Header(&header), grpc.Trailer(&trailer))
 	if err != nil {
 		if stat, ok := status.FromError(err); ok {
 			fmt.Printf("Error Code: %v \n", stat.Code())
@@ -93,6 +100,8 @@ func Hello() {
 			return
 		}
 	} else {
+		fmt.Println(header)
+		fmt.Println(trailer)
 		fmt.Println(res.GetMessage())
 	}
 }
@@ -159,7 +168,10 @@ func HelloClientStream() {
 }
 
 func HelloBiStream() {
-	stream, err := client.HelloBiStream(context.Background())
+	ctx := context.Background()
+	md := metadata.New(map[string]string{"type": "bistream", "from": "client"})
+	ctx = metadata.NewOutgoingContext(ctx, md)
+	stream, err := client.HelloBiStream(ctx)
 	if err != nil {
 		log.Fatalf("error while calling HelloBiStream RPC: %v", err)
 		return
@@ -190,7 +202,15 @@ func HelloBiStream() {
 				}
 			}
 		}
+
+		var headerMd metadata.MD
 		if !recvEnd {
+			if headerMd == nil {
+				if headerMd, err = stream.Header(); err != nil {
+					log.Fatalf("error while getting header: %v", err)
+				}
+				fmt.Println(headerMd)
+			}
 			if res, err := stream.Recv(); err != nil {
 				if !errors.Is(err, io.EOF) {
 					log.Fatalf("error while reading stream: %v", err)
@@ -201,4 +221,7 @@ func HelloBiStream() {
 			}
 		}
 	}
+
+	trailerMd := stream.Trailer()
+	fmt.Println(trailerMd)
 }
